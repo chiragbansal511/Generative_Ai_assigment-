@@ -4,23 +4,23 @@ import ui
 
 # --- Page Configuration and Title ---
 st.set_page_config(
-    page_title="EduContent Seasoned",
+    page_title="EduContent Seasoned (Offline)",
     page_icon="🎓",
     layout="wide"
 )
-st.title("🎓 EduContent Seasoned")
+st.title("🎓 EduContent Seasoned (Offline Edition)")
 st.markdown("Your AI-powered assistant for creating structured learning content from a single source.")
 
 # --- Initialize Session State ---
 utils.init_session_state()
 
 # --- Render Sidebar and Check Readiness ---
-# This function handles API key and file upload, and returns True if both are ready
+# This function handles Ollama connection, model selection, and file upload
 app_ready = ui.render_sidebar()
 
 if app_ready:
     # --- Main App Logic ---
-    model = st.session_state.gemini_model
+    model_name = st.session_state.ollama_model_name  # Use the selected model name
     source_text = st.session_state.source_text
     
     col1, col2 = st.columns([1, 1])
@@ -37,7 +37,7 @@ if app_ready:
             st.session_state.selected_node_content = None
             st.session_state.assignment = None
             
-            with st.spinner("AI is analyzing your content to build a roadmap..."):
+            with st.spinner(f"AI ({model_name}) is analyzing your content..."):
                 prompt = f"""
                 Analyze the following source text and generate a hierarchical learning roadmap.
                 The roadmap should identify the main topics, sub-topics, and specific concepts.
@@ -59,7 +59,8 @@ if app_ready:
                 {source_text}
                 ---
                 """
-                response_text = utils.call_gemini_api(model, prompt)
+                # Call the new Ollama function
+                response_text = utils.call_ollama_api(model_name, prompt)
                 
                 if response_text:
                     nodes, dot_string = utils.parse_roadmap_to_dot(response_text)
@@ -77,8 +78,8 @@ if app_ready:
             clicked_label = ui.render_node_selection(st.session_state.roadmap_nodes)
             if clicked_label:
                 st.session_state.selected_node_label = clicked_label
-                st.session_state.selected_node_content = None  # Reset content
-                st.session_state.assignment = None  # Reset assignment
+                st.session_state.selected_node_content = None
+                st.session_state.assignment = None
                 st.rerun()
 
     # --- Column 2: Content Generation and Assignment ---
@@ -86,7 +87,7 @@ if app_ready:
         # Check if a node is selected AND content hasn't been generated yet
         if st.session_state.selected_node_label and not st.session_state.selected_node_content:
             st.header(f"Content for: {st.session_state.selected_node_label}")
-            with st.spinner(f"AI is generating content for '{st.session_state.selected_node_label}'..."):
+            with st.spinner(f"AI ({model_name}) is generating content..."):
                 prompt = f"""
                 Based *only* on the following source text, generate a detailed explanation
                 for the specific topic: "{st.session_state.selected_node_label}".
@@ -99,10 +100,11 @@ if app_ready:
                 {source_text}
                 ---
                 """
-                response_text = utils.call_gemini_api(model, prompt)
+                # Call the new Ollama function
+                response_text = utils.call_ollama_api(model_name, prompt)
                 if response_text:
                     st.session_state.selected_node_content = response_text
-                    st.rerun() # Rerun to display the content immediately
+                    st.rerun() 
                 else:
                     st.error("AI failed to generate content for this node.")
 
@@ -115,7 +117,7 @@ if app_ready:
             
             # Assignment Generation
             if st.button("Generate Assignment", key=f"assign_{st.session_state.selected_node_label}"):
-                with st.spinner("AI is generating an assignment..."):
+                with st.spinner(f"AI ({model_name}) is generating an assignment..."):
                     prompt = f"""
                     Based *only* on the following detailed text, create a short 3-question
                     multiple-choice quiz. 
@@ -129,7 +131,8 @@ if app_ready:
                     {st.session_state.selected_node_content}
                     ---
                     """
-                    response_text = utils.call_gemini_api(model, prompt)
+                    # Call the new Ollama function
+                    response_text = utils.call_ollama_api(model_name, prompt)
                     if response_text:
                         st.session_state.assignment = response_text
                     else:

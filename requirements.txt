@@ -1,4 +1,4 @@
 streamlit
-google-generativeai
+ollama
 pypdf
 graphviz

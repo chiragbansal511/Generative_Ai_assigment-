@@ -1,22 +1,32 @@
 import streamlit as st
-from utils import configure_gemini, parse_pdf, parse_txt
+from utils import check_ollama_connection, parse_pdf, parse_txt
 
 def render_sidebar():
     """
-    Renders the sidebar components for API configuration and file upload.
-    Returns True if the app is ready to proceed (API and file are set), False otherwise.
+    Renders the sidebar components for Ollama configuration and file upload.
+    Returns True if the app is ready to proceed (model and file are set), False otherwise.
     """
     with st.sidebar:
-        st.header("1. Setup")
-        api_key = st.text_input("Enter your Google Gemini API Key:", type="password")
-        
-        if api_key and not st.session_state.gemini_model:
-            model = configure_gemini(api_key)
-            if model:
-                st.session_state.gemini_model = model
-                st.success("Gemini API Key configured!")
+        st.header("1. Setup (Offline Model)")
+        st.markdown("This app uses Ollama to run models locally. [Download Ollama here](https://ollama.com/).")
+
+        if st.button("Check Ollama Connection"):
+            models = check_ollama_connection()
+            if models:
+                st.session_state.available_models = [m['name'] for m in models]
+                st.success(f"Ollama is running! Found {len(models)} models.")
             else:
-                st.error("Failed to configure API. Please check your key.")
+                st.session_state.available_models = []
+                st.error("Ollama connection failed. Is it running?")
+
+        if st.session_state.available_models:
+            selected_model = st.selectbox(
+                "Select an Ollama model:",
+                st.session_state.available_models
+            )
+            st.session_state.ollama_model_name = selected_model
+        else:
+            st.info("Click 'Check Connection' to find your local models. If empty, pull one with `ollama pull phi3`")
 
         st.header("2. Upload Source")
         uploaded_file = st.file_uploader(
@@ -25,8 +35,8 @@ def render_sidebar():
         )
         
         if uploaded_file:
-            if not st.session_state.gemini_model:
-                st.warning("Please enter your Gemini API key to proceed.")
+            if not st.session_state.ollama_model_name:
+                st.warning("Please connect to Ollama and select a model to proceed.")
             else:
                 file_bytes = uploaded_file.getvalue()
                 if uploaded_file.type == "application/pdf":
@@ -41,8 +51,8 @@ def render_sidebar():
                         st.text(text[:500] + "...")
 
     # Return status checks
-    if not st.session_state.gemini_model:
-        st.info("Please enter your Google Gemini API Key in the sidebar to begin.")
+    if not st.session_state.ollama_model_name:
+        st.info("Please connect to Ollama and select a model in the sidebar to begin.")
         return False
     
     if not st.session_state.source_text:
@@ -50,6 +60,8 @@ def render_sidebar():
         return False
         
     return True
+
+# --- These UI functions remain unchanged ---
 
 def render_roadmap_visual(dot_string):
     """Displays the Graphviz roadmap."""

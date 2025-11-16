@@ -1,56 +1,42 @@
 import streamlit as st
-import google.generativeai as genai
+import ollama
 import time
 import re
 import io
 import pypdf
 
-# --- Gemini API Configuration ---
-def configure_gemini(api_key):
-    """Configures the Generative AI model with the provided API key and safety settings."""
+# --- Ollama Configuration ---
+def check_ollama_connection():
+    """Checks if the Ollama service is running and returns available models."""
     try:
-        genai.configure(api_key=api_key)
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 1,
-            "top_k": 1,
-            "max_output_tokens": 4096,
-        }
-        safety_settings = [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-        ]
-        model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-preview-09-2025",
-            generation_config=generation_config,
-            safety_settings=safety_settings
-        )
-        return model
+        models = ollama.list()
+        return models['models']
     except Exception as e:
-        st.error(f"Error configuring Gemini: {e}")
+        st.error(f"Ollama connection error: {e}")
+        st.error("Please make sure Ollama is running on your machine.")
         return None
 
-def call_gemini_api(model, prompt, max_retries=5):
-    """Calls the Gemini API (synchronously) with exponential backoff."""
+def call_ollama_api(model_name, prompt, max_retries=3):
+    """Calls the local Ollama API with a simple retry logic."""
     delay = 1
     for i in range(max_retries):
         try:
-            response = model.generate_content(prompt)
-            return response.text
+            # Use ollama.chat for instruction-following models
+            response = ollama.chat(
+                model=model_name,
+                messages=[{'role': 'user', 'content': prompt}]
+            )
+            return response['message']['content']
         except Exception as e:
-            if "quota" in str(e).lower() or "rate limit" in str(e).lower():
-                st.warning(f"Rate limit exceeded. Retrying in {delay}s... ({i+1}/{max_retries})")
-                time.sleep(delay)
-                delay *= 2
-            else:
-                st.error(f"An unexpected error occurred with the Gemini API: {e}")
-                return None
-    st.error("Failed to get a response from Gemini after several retries. Please check your quota.")
+            st.warning(f"Error calling Ollama: {e}. Retrying in {delay}s...")
+            time.sleep(delay)
+            delay *= 2
+    
+    st.error(f"Failed to get a response from Ollama model '{model_name}' after {max_retries} retries.")
+    st.error("Please ensure Ollama is running and the model is downloaded (e.g., 'ollama pull phi3').")
     return None
 
-# --- PDF and Text Parsing ---
+# --- PDF and Text Parsing (No changes) ---
 def parse_pdf(file_bytes):
     """Extracts text from an uploaded PDF file."""
     try:
@@ -72,7 +58,7 @@ def parse_txt(file_bytes):
         st.error(f"Error parsing TXT file: {e}")
         return None
 
-# --- Roadmap Parsing and DOT String Generation ---
+# --- Roadmap Parsing (No changes) ---
 def parse_roadmap_to_dot(markdown_text):
     """
     Parses a nested markdown list and generates a Graphviz DOT string
@@ -119,7 +105,7 @@ def parse_roadmap_to_dot(markdown_text):
     
     return nodes, dot_string
 
-# --- Session State Initialization ---
+# --- Session State Initialization (Modified) ---
 def init_session_state():
     """Initializes session state variables."""
     defaults = {
@@ -129,7 +115,8 @@ def init_session_state():
         "selected_node_label": None,
         "selected_node_content": None,
         "assignment": None,
-        "gemini_model": None
+        "ollama_model_name": None,  # Replaces gemini_model
+        "available_models": []
     }
     for key, value in defaults.items():
         if key not in st.session_state:
