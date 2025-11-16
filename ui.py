@@ -1,32 +1,26 @@
 import streamlit as st
-from utils import check_ollama_connection, parse_pdf, parse_txt
+from utils import parse_pdf, parse_txt
 
 def render_sidebar():
     """
-    Renders the sidebar components for Ollama configuration and file upload.
-    Returns True if the app is ready to proceed (model and file are set), False otherwise.
+    Renders the sidebar components for Model Path and File Upload.
+    Returns True if the app is ready to proceed (model path and file are set), False otherwise.
     """
     with st.sidebar:
-        st.header("1. Setup (Offline Model)")
-        st.markdown("This app uses Ollama to run models locally. [Download Ollama here](https://ollama.com/).")
-
-        if st.button("Check Ollama Connection"):
-            models = check_ollama_connection()
-            if models:
-                st.session_state.available_models = [m['name'] for m in models]
-                st.success(f"Ollama is running! Found {len(models)} models.")
-            else:
-                st.session_state.available_models = []
-                st.error("Ollama connection failed. Is it running?")
-
-        if st.session_state.available_models:
-            selected_model = st.selectbox(
-                "Select an Ollama model:",
-                st.session_state.available_models
-            )
-            st.session_state.ollama_model_name = selected_model
-        else:
-            st.info("Click 'Check Connection' to find your local models. If empty, pull one with `ollama pull phi3`")
+        st.header("1. Setup (Direct Model)")
+        st.markdown("""
+        Download a GGUF model file from Hugging Face.
+        We recommend **Phi-3-mini-4k-instruct-q4.gguf**.
+        
+        [Click here to download it](https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/blob/main/Phi-3-mini-4k-instruct-q4.gguf)
+        (Right-click the "download" button and "Save Link As...")
+        """)
+        
+        model_path = st.text_input("Enter the *full file path* to your .gguf model:")
+        st.session_state.model_path = model_path
+        
+        if model_path:
+            st.success("Model path set!")
 
         st.header("2. Upload Source")
         uploaded_file = st.file_uploader(
@@ -35,8 +29,8 @@ def render_sidebar():
         )
         
         if uploaded_file:
-            if not st.session_state.ollama_model_name:
-                st.warning("Please connect to Ollama and select a model to proceed.")
+            if not st.session_state.model_path:
+                st.warning("Please provide the path to your model file above.")
             else:
                 file_bytes = uploaded_file.getvalue()
                 if uploaded_file.type == "application/pdf":
@@ -51,12 +45,12 @@ def render_sidebar():
                         st.text(text[:500] + "...")
 
     # Return status checks
-    if not st.session_state.ollama_model_name:
-        st.info("Please connect to Ollama and select a model in the sidebar to begin.")
+    if not st.session_state.model_path:
+        st.info("Please provide the file path to your GGUF model in the sidebar.")
         return False
     
     if not st.session_state.source_text:
-        st.info("Please upload your source content in the sidebar to get started.")
+        st.info("Please upload your source content in the sidebar.")
         return False
         
     return True

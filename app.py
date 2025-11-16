@@ -4,23 +4,34 @@ import ui
 
 # --- Page Configuration and Title ---
 st.set_page_config(
-    page_title="EduContent Seasoned (Offline)",
+    page_title="EduContent Seasoned (Direct)",
     page_icon="🎓",
     layout="wide"
 )
-st.title("🎓 EduContent Seasoned (Offline Edition)")
+st.title("🎓 EduContent Seasoned (Direct Python Edition)")
 st.markdown("Your AI-powered assistant for creating structured learning content from a single source.")
 
 # --- Initialize Session State ---
 utils.init_session_state()
 
 # --- Render Sidebar and Check Readiness ---
-# This function handles Ollama connection, model selection, and file upload
 app_ready = ui.render_sidebar()
 
 if app_ready:
     # --- Main App Logic ---
-    model_name = st.session_state.ollama_model_name  # Use the selected model name
+    
+    # 1. Load the model (or get from cache)
+    if not st.session_state.llm_model:
+        with st.spinner(f"Loading model from '{st.session_state.model_path}'... This may take a minute."):
+            st.session_state.llm_model = utils.load_model(st.session_state.model_path)
+    
+    # If loading failed, stop
+    if not st.session_state.llm_model:
+        st.error("Model could not be loaded. Please check the file path in the sidebar.")
+        st.stop()
+        
+    # Get the loaded model and source text
+    model = st.session_state.llm_model
     source_text = st.session_state.source_text
     
     col1, col2 = st.columns([1, 1])
@@ -30,37 +41,28 @@ if app_ready:
         st.header("Learning Roadmap")
         
         if st.button("Generate Learning Roadmap", type="primary"):
-            # Reset state for a new generation
             st.session_state.roadmap_nodes = []
             st.session_state.roadmap_dot = None
             st.session_state.selected_node_label = None
             st.session_state.selected_node_content = None
             st.session_state.assignment = None
             
-            with st.spinner(f"AI ({model_name}) is analyzing your content..."):
+            with st.spinner("AI is analyzing your content to build a roadmap..."):
+                # Simplified prompt for a direct model
                 prompt = f"""
                 Analyze the following source text and generate a hierarchical learning roadmap.
                 The roadmap should identify the main topics, sub-topics, and specific concepts.
                 
                 Format the output *only* as a nested markdown list. 
-                Use 2 spaces for each level of indentation.
                 Do not include any other text or explanation.
 
-                Example:
-                - Main Topic 1
-                  - Sub-Topic 1.1
-                    - Concept 1.1.1
-                  - Sub-Topic 1.2
-                - Main Topic 2
-                  - Sub-Topic 2.1
-
-                Here is the source text:
+                Source Text:
                 ---
                 {source_text}
                 ---
                 """
-                # Call the new Ollama function
-                response_text = utils.call_ollama_api(model_name, prompt)
+                # Call the new model function
+                response_text = utils.call_model_api(model, prompt)
                 
                 if response_text:
                     nodes, dot_string = utils.parse_roadmap_to_dot(response_text)
@@ -87,7 +89,7 @@ if app_ready:
         # Check if a node is selected AND content hasn't been generated yet
         if st.session_state.selected_node_label and not st.session_state.selected_node_content:
             st.header(f"Content for: {st.session_state.selected_node_label}")
-            with st.spinner(f"AI ({model_name}) is generating content..."):
+            with st.spinner(f"AI is generating content for '{st.session_state.selected_node_label}'..."):
                 prompt = f"""
                 Based *only* on the following source text, generate a detailed explanation
                 for the specific topic: "{st.session_state.selected_node_label}".
@@ -100,8 +102,7 @@ if app_ready:
                 {source_text}
                 ---
                 """
-                # Call the new Ollama function
-                response_text = utils.call_ollama_api(model_name, prompt)
+                response_text = utils.call_model_api(model, prompt)
                 if response_text:
                     st.session_state.selected_node_content = response_text
                     st.rerun() 
@@ -117,7 +118,7 @@ if app_ready:
             
             # Assignment Generation
             if st.button("Generate Assignment", key=f"assign_{st.session_state.selected_node_label}"):
-                with st.spinner(f"AI ({model_name}) is generating an assignment..."):
+                with st.spinner("AI is generating an assignment..."):
                     prompt = f"""
                     Based *only* on the following detailed text, create a short 3-question
                     multiple-choice quiz. 
@@ -131,8 +132,7 @@ if app_ready:
                     {st.session_state.selected_node_content}
                     ---
                     """
-                    # Call the new Ollama function
-                    response_text = utils.call_ollama_api(model_name, prompt)
+                    response_text = utils.call_model_api(model, prompt)
                     if response_text:
                         st.session_state.assignment = response_text
                     else:

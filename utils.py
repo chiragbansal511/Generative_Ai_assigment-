@@ -1,40 +1,48 @@
 import streamlit as st
-import ollama
 import time
 import re
 import io
 import pypdf
+from ctransformers import AutoModelForCausalLM
 
-# --- Ollama Configuration ---
-def check_ollama_connection():
-    """Checks if the Ollama service is running and returns available models."""
+# --- Model Loading (NEW) ---
+
+@st.cache_resource
+def load_model(model_path):
+    """
+    Loads the GGUF model from the given file path.
+    We cache this so it only loads once per session.
+    """
+    if not model_path:
+        return None
     try:
-        models = ollama.list()
-        return models['models']
+        # model_type="phi-3" is more specific and better if we recommend Phi-3
+        llm = AutoModelForCausalLM.from_pretrained(model_path, model_type="phi-3")
+        return llm
     except Exception as e:
-        st.error(f"Ollama connection error: {e}")
-        st.error("Please make sure Ollama is running on your machine.")
+        st.error(f"Error loading model from path '{model_path}': {e}")
+        st.error("Please ensure the file path is correct and you have downloaded a compatible GGUF model.")
         return None
 
-def call_ollama_api(model_name, prompt, max_retries=3):
-    """Calls the local Ollama API with a simple retry logic."""
-    delay = 1
-    for i in range(max_retries):
-        try:
-            # Use ollama.chat for instruction-following models
-            response = ollama.chat(
-                model=model_name,
-                messages=[{'role': 'user', 'content': prompt}]
-            )
-            return response['message']['content']
-        except Exception as e:
-            st.warning(f"Error calling Ollama: {e}. Retrying in {delay}s...")
-            time.sleep(delay)
-            delay *= 2
+def call_model_api(llm, prompt):
+    """
+    Calls the loaded CTransformer model with a specific chat template.
+    """
+    if not llm:
+        st.error("Model is not loaded.")
+        return None
     
-    st.error(f"Failed to get a response from Ollama model '{model_name}' after {max_retries} retries.")
-    st.error("Please ensure Ollama is running and the model is downloaded (e.g., 'ollama pull phi3').")
-    return None
+    try:
+        # We must format the prompt using the model's expected chat template.
+        # For Phi-3, the template is: <|user|>\n{prompt}<|end|>\n<|assistant|>
+        formatted_prompt = f"<|user|>\n{prompt}<|end|>\n<|assistant|>"
+        
+        # Generate the response
+        response = llm(formatted_prompt, stream=False, max_new_tokens=4096)
+        return response
+    except Exception as e:
+        st.error(f"Error during model generation: {e}")
+        return None
 
 # --- PDF and Text Parsing (No changes) ---
 def parse_pdf(file_bytes):
@@ -105,7 +113,7 @@ def parse_roadmap_to_dot(markdown_text):
     
     return nodes, dot_string
 
-# --- Session State Initialization (Modified) ---
+# --- Session State Initialization (Updated) ---
 def init_session_state():
     """Initializes session state variables."""
     defaults = {
@@ -115,8 +123,8 @@ def init_session_state():
         "selected_node_label": None,
         "selected_node_content": None,
         "assignment": None,
-        "ollama_model_name": None,  # Replaces gemini_model
-        "available_models": []
+        "model_path": None,  # NEW: Path to the GGUF file
+        "llm_model": None    # NEW: The loaded model object
     }
     for key, value in defaults.items():
         if key not in st.session_state:
