@@ -1,4 +1,6 @@
 streamlit
 pypdf
 graphviz
-ctransformers
+ctransformers>=0.2.27
+requests
+beautifulsoup4
