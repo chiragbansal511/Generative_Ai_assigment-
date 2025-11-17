@@ -3,10 +3,24 @@ import utils
 
 def render_sidebar():
     """
-    Renders the sidebar components for providing source content.
+    Renders the sidebar components for providing model path and source content.
     """
     with st.sidebar:
-        st.header("1. Provide Source Content")
+        st.header("1. Load Your Llama Model")
+        st.markdown("Enter the *full file path* to your Llama `.gguf` model file.")
+        
+        model_path = st.text_input(
+            "Model File Path:", 
+            key="model_path",
+            label_visibility="collapsed"
+        )
+        
+        if model_path:
+            st.success("Model path set!")
+
+        st.divider()
+
+        st.header("2. Provide Source Content")
         st.markdown("Choose one method to provide your content.")
         
         tab_file, tab_text, tab_url = st.tabs(["File Upload", "Paste Text", "From URL"])
