@@ -3,20 +3,25 @@ import utils
 
 def render_sidebar():
     """
-    Renders the sidebar components for providing model path and source content.
+    Renders the sidebar components for API Key and source content.
     """
     with st.sidebar:
-        st.header("1. Load Your Llama Model")
-        st.markdown("Enter the *full file path* to your Llama `.gguf` model file.")
+        st.header("1. Google AI Setup")
         
-        model_path = st.text_input(
-            "Model File Path:", 
-            key="model_path",
-            label_visibility="collapsed"
+        api_key = st.text_input(
+            "Enter Google AI Studio API Key:", 
+            type="password",
+            help="Get your key from https://aistudio.google.com/"
         )
         
-        if model_path:
-            st.success("Model path set!")
+        if api_key:
+            # Only configure if the key has changed or model isn't set
+            if api_key != st.session_state.gemini_api_key:
+                model = utils.configure_gemini(api_key)
+                if model:
+                    st.session_state.gemini_api_key = api_key
+                    st.session_state.gemini_model = model
+                    st.success("Gemini Configured!")
 
         st.divider()
 
@@ -73,8 +78,6 @@ def render_sidebar():
             
             st.rerun()
 
-# --- These UI functions remain unchanged ---
-
 def render_roadmap_visual(dot_string):
     """Displays the Graphviz roadmap."""
     st.graphviz_chart(dot_string)
@@ -88,9 +91,11 @@ def render_node_selection(nodes):
     clicked_label = None
     node_container = st.container()
     with node_container:
-        for level, label in nodes:
+        # FIX: enumerate adds a unique index 'i' to prevent duplicate keys
+        for i, (level, label) in enumerate(nodes):
             indent = "• " * level
-            if st.button(f"{indent}{label}", key=f"btn_{label}"):
+            # Key is now f"btn_{i}_{label}" making it unique even if label repeats
+            if st.button(f"{indent}{label}", key=f"btn_{i}_{label}"):
                 clicked_label = label
     return clicked_label
 

@@ -1,6 +1,6 @@
 streamlit
 pypdf
 graphviz
-ctransformers>=0.2.27
+google-generativeai
 requests
 beautifulsoup4

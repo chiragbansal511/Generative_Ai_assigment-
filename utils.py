@@ -1,56 +1,50 @@
 import streamlit as st
-import time
-import re
 import io
 import pypdf
-import os
 import requests
+import re
 from bs4 import BeautifulSoup
-from ctransformers import AutoModelForCausalLM
+import google.generativeai as genai
 
-# --- Model Loading (for your Llama model) ---
-
-@st.cache_resource
-def load_model(model_path):
-    """Loads your local GGUF model from the given file path."""
-    if not model_path:
-        return None
-    
-    if not os.path.exists(model_path):
-        st.error(f"Error: Model file not found at path: {model_path}")
-        return None
-        
+# --- Gemini Configuration ---
+def configure_gemini(api_key):
+    """Configures the Gemini model with the provided API key."""
     try:
-        # --- THIS IS THE FIX ---
-        # We are now specifying the model_type as "llama"
-        llm = AutoModelForCausalLM.from_pretrained(model_path, model_type="llama")
-        return llm
+        genai.configure(api_key=api_key)
+        
+        # UPDATED: Using the latest stable model for late 2025
+        model_name = 'gemini-2.5-flash' 
+        
+        model = genai.GenerativeModel(model_name)
+        return model
     except Exception as e:
-        st.error(f"Error loading model: {e}")
-        st.error("Please ensure you have a compatible GGUF file and the correct file path.")
+        st.error(f"Error configuring Gemini: {e}")
         return None
 
-def call_model_api(llm, prompt):
-    """Calls the loaded CTransformer model with the Llama 3 chat template."""
-    if not llm:
-        st.error("Model is not loaded.")
+def call_gemini_api(model, prompt):
+    """Calls the Gemini API to generate content."""
+    if not model:
+        st.error("Gemini model is not configured.")
         return None
     
     try:
-        # --- THIS IS THE FIX ---
-        # We are using the Llama 3 Instruct chat template.
-        formatted_prompt = (
-            f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n"
-            f"{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
-        )
-        
-        response = llm(formatted_prompt, stream=False, max_new_tokens=4096)
-        return response
+        response = model.generate_content(prompt)
+        return response.text
     except Exception as e:
-        st.error(f"Error during model generation: {e}")
+        # Helper to debug model names if 2.5 fails
+        if "404" in str(e) or "not found" in str(e).lower():
+            st.error(f"Model Error: {e}")
+            st.warning("Attempting to list available models for your API key...")
+            try:
+                available = [m.name for m in genai.list_models()]
+                st.code(f"Available Models:\n{available}")
+            except:
+                st.error("Could not list models.")
+        else:
+            st.error(f"Error calling Gemini API: {e}")
         return None
 
-# --- Content Parsing (No changes) ---
+# --- Content Parsing ---
 
 def fetch_url_content(url):
     """Fetches and parses the main text content from a URL."""
@@ -94,34 +88,45 @@ def parse_txt(file_bytes):
         st.error(f"Error parsing TXT file: {e}")
         return None
 
-# --- Roadmap Parsing (No changes) ---
+# --- Roadmap Parsing ---
 def parse_roadmap_to_dot(markdown_text):
+    """Parses the markdown list into a Graphviz DOT format."""
     if not markdown_text:
         return [], ""
     nodes = []
     dot_edges = []
     dot_nodes = set()
     parent_stack = []
-    for line in markdown_text.split('\n'):
+    
+    lines = markdown_text.split('\n')
+    
+    for line in lines:
         match = re.match(r'^(\s*)[-*]\s(.*)', line)
         if match:
             indentation = len(match.group(1))
             label = match.group(2).strip()
             level = indentation // 2
+            
             nodes.append((level, label))
-            node_name = f'"{label}"'
+            
+            safe_label = label.replace('"', "'")
+            node_name = f'"{safe_label}"'
+            
             while len(parent_stack) > level:
                 parent_stack.pop()
+                
             if parent_stack:
-                parent_label = parent_stack[-1]
+                parent_label = parent_stack[-1].replace('"', "'")
                 parent_name = f'"{parent_label}"'
                 dot_edges.append(f'{parent_name} -> {node_name};')
             else:
                 dot_nodes.add(f'{node_name};')
+            
             parent_stack.append(label)
+            
     dot_string = "digraph G {\n"
-    dot_string += "  node [shape=box, style=rounded, fontname=Inter, fillcolor=\"#E6F7FF\", style=filled];\n"
-    dot_string += "  edge [fontname=Inter];\n"
+    dot_string += "  node [shape=box, style=rounded, fontname=Helvetica, fillcolor=\"#E6F7FF\", style=filled];\n"
+    dot_string += "  edge [fontname=Helvetica];\n"
     dot_string += "  rankdir=LR;\n"
     dot_string += "  " + "\n  ".join(list(dot_nodes)) + "\n"
     dot_string += "  " + "\n  ".join(dot_edges) + "\n"
@@ -137,8 +142,8 @@ def init_session_state():
         "selected_node_label": None,
         "selected_node_content": None,
         "assignment": None,
-        "llm_model": None, # Model object will be stored here
-        "model_path": None  # Path to your Llama model
+        "gemini_api_key": None,
+        "gemini_model": None
     }
     for key, value in defaults.items():
         if key not in st.session_state:

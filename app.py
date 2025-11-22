@@ -4,41 +4,30 @@ import ui
 
 # --- Page Configuration and Title ---
 st.set_page_config(
-    page_title="EduContent Seasoned (Llama)",
+    page_title="EduContent Seasoned (Gemini)",
     page_icon="🎓",
     layout="wide"
 )
-st.title("🎓 EduContent Seasoned (Your Llama Edition)")
-st.markdown("Your fully-automated assistant for creating structured learning content.")
+st.title("🎓 EduContent Seasoned (Gemini Edition)")
+st.markdown("Your AI-powered assistant for creating structured learning content using Google Gemini.")
 
 # --- Initialize Session State ---
 utils.init_session_state()
 
 # --- Render Sidebar ---
-# The sidebar now handles setting st.session_state.model_path
-# and st.session_state.source_text
 ui.render_sidebar()
 
-# --- Model Loading (Loads your Llama model) ---
-if st.session_state.model_path and not st.session_state.llm_model:
-    with st.spinner(f"Loading your Llama model from '{st.session_state.model_path}'..."):
-        st.session_state.llm_model = utils.load_model(st.session_state.model_path)
-        if st.session_state.llm_model:
-            st.success("Llama model loaded successfully!")
-
-# --- Main App Logic ---
-# Check if the model is loaded first
-if not st.session_state.llm_model:
-    st.info("Please provide the file path to your Llama GGUF model in the sidebar.")
+# --- Validation Checks ---
+if not st.session_state.gemini_model:
+    st.info("Please enter your Google AI Studio API Key in the sidebar to begin.")
     st.stop()
 
-# If model is loaded, check if source text is ready
 if not st.session_state.source_text:
     st.info("Please provide a source (file, text, or URL) in the sidebar and click 'Process Source'.")
     st.stop()
 
-# --- If both Model and Source are ready, run the app ---
-model = st.session_state.llm_model
+# --- Main App Logic ---
+model = st.session_state.gemini_model
 source_text = st.session_state.source_text
 
 col1, col2 = st.columns([1, 1])
@@ -54,7 +43,7 @@ with col1:
         st.session_state.selected_node_content = None
         st.session_state.assignment = None
         
-        with st.spinner("Your Llama is analyzing the content..."):
+        with st.spinner("Gemini is analyzing the content..."):
             prompt = f"""
             Analyze the following source text and generate a hierarchical learning roadmap.
             Format the output *only* as a nested markdown list. 
@@ -71,7 +60,7 @@ with col1:
             {source_text}
             ---
             """
-            response_text = utils.call_model_api(model, prompt)
+            response_text = utils.call_gemini_api(model, prompt)
             
             if response_text:
                 nodes, dot_string = utils.parse_roadmap_to_dot(response_text)
@@ -95,7 +84,7 @@ with col1:
 with col2:
     if st.session_state.selected_node_label and not st.session_state.selected_node_content:
         st.header(f"Content for: {st.session_state.selected_node_label}")
-        with st.spinner(f"Your Llama is generating content for '{st.session_state.selected_node_label}'..."):
+        with st.spinner(f"Generating content for '{st.session_state.selected_node_label}'..."):
             prompt = f"""
             Based *only* on the following source text, generate a detailed explanation
             for the specific topic: "{st.session_state.selected_node_label}".
@@ -106,7 +95,7 @@ with col2:
             {source_text}
             ---
             """
-            response_text = utils.call_model_api(model, prompt)
+            response_text = utils.call_gemini_api(model, prompt)
             if response_text:
                 st.session_state.selected_node_content = response_text
                 st.rerun() 
@@ -120,7 +109,7 @@ with col2:
         )
         
         if st.button("Generate Assignment", key=f"assign_{st.session_state.selected_node_label}"):
-            with st.spinner("Your Llama is generating an assignment..."):
+            with st.spinner("Generating assignment..."):
                 prompt = f"""
                 Based *only* on the following detailed text, create a short 3-question
                 multiple-choice quiz with a correct answer key.
@@ -130,7 +119,7 @@ with col2:
                 {st.session_state.selected_node_content}
                 ---
                 """
-                response_text = utils.call_model_api(model, prompt)
+                response_text = utils.call_gemini_api(model, prompt)
                 if response_text:
                     st.session_state.assignment = response_text
                 else:
